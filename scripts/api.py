@@ -67,6 +67,7 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
             return
 
         input_image = api.decode_base64_to_image(input_image)
+        input_image = input_image.convert("RGB")
 
         image = rembg.remove(
             input_image,
