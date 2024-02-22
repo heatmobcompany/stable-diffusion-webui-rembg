@@ -10,6 +10,14 @@ import base64
 
 import rembg
 
+import time
+try:
+    from helper.logging import Logger
+    logger = Logger("REMBG")
+except Exception:
+    import logging
+    logger = logging.getLogger("REMBG")
+
 # models = [
 #     "None",
 #     "u2net",
@@ -35,6 +43,8 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         alpha_matting_background_threshold: int = Body(10, title='alpha matting background threshold'), 
         alpha_matting_erode_size: int = Body(10, title='alpha matting erode size')
     ):
+        logger.info("===== API/rembg start =====")
+        start_time = time.time()
         if not model or model == "None":
             return
 
@@ -49,7 +59,7 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
             alpha_matting_background_threshold=alpha_matting_background_threshold,
             alpha_matting_erode_size=alpha_matting_erode_size,
         )
-
+        logger.info("===== API /rembg end in {:.3f} seconds =====".format(time.time() - start_time))
         return {"image": api.encode_pil_to_base64(image).decode("utf-8")}
 
 
@@ -63,6 +73,8 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         alpha_matting_background_threshold: int = Body(10, title='alpha matting background threshold'), 
         alpha_matting_erode_size: int = Body(10, title='alpha matting erode size')
     ):
+        logger.info("===== API /sdapi/v2/rembg start =====")
+        start_time = time.time()
         if not model or model == "None":
             return
 
@@ -79,7 +91,7 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
             alpha_matting_erode_size=alpha_matting_erode_size,
         )
         left, upper, right, lower = image.getbbox()
-
+        logger.info("===== API /sdapi/v2/rembg end in {:.3f} seconds =====".format(time.time() - start_time))
         return  {
                     "image": api.encode_pil_to_base64(image).decode("utf-8"),
                     "box": {
@@ -89,7 +101,7 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
 
     
     def crop_and_resize_image(image, width=None, height=None):
-        print("Cropping and resizing image", width, height)
+        logger.info(f"Cropping and resizing image: {width} {height}")
         image = image.convert("RGBA")
         image_data = image.getdata()
         non_transparent_pixels = [pixel for pixel in image_data if pixel[3] > 0]
@@ -117,6 +129,8 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
 
     @app.post("/sdapi/v2/auto-crop")
     async def auto_crop(data: ImageRequest):
+        logger.info("===== API /sdapi/v2/auto-crop start =====")
+        start_time = time.time()
         try:
             image_base64 = data.image
             if image_base64.startswith("data:image/"):
@@ -128,8 +142,10 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
             height = data.height
 
             output_base64 = crop_and_resize_image(image, width, height)
+            logger.info("===== API /sdapi/v2/auto-crop end in {:.3f} seconds =====".format(time.time() - start_time))
             return {"image": output_base64}
         except Exception as e:
+            logger.error("===== API /sdapi/v2/auto-crop end in {:.3f} seconds =====".format(time.time() - start_time))
             raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -145,6 +161,9 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         width: int = Body(0, title='width of the output image'),
         height: int = Body(0, title='height of the output image'),
     ):
+        logger.info("===== API /sdapi/v2/rembg-crop start =====")
+        start_time = time.time()
+
         if not model or model == "None":
             return
 
@@ -161,6 +180,7 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         )
         
         image = crop_and_resize_image(image, width, height)
+        logger.error("===== API /sdapi/v2/rembg-crop end in {:.3f} seconds =====".format(time.time() - start_time))
         return {"image": image}
 
 try:
