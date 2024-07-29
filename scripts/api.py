@@ -101,14 +101,22 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
 
     
     def crop_and_resize_image(image, width=None, height=None):
+        def get_bbox(img, alpha_threshold=10):
+            width, height = img.size
+            pixels = img.load()
+            left, top, right, bottom = width, height, 0, 0
+
+            for y in range(height):
+                for x in range(width):
+                    if pixels[x, y][3] > alpha_threshold:
+                        left, right = min(left, x), max(right, x)
+                        top, bottom = min(top, y), max(bottom, y)
+            return (left, top, right, bottom) if left <= right and top <= bottom else None
+
         logger.info(f"Cropping and resizing image: {width} {height}")
         image = image.convert("RGBA")
-        image_data = image.getdata()
-        non_transparent_pixels = [pixel for pixel in image_data if pixel[3] > 0]
-        if not non_transparent_pixels:
-            raise HTTPException(status_code=400, detail="No non-transparent pixels in the image")
 
-        left, upper, right, lower = image.getbbox()
+        left, upper, right, lower = get_bbox(image, 10)
         cropped_image = image.crop((left, upper, right, lower))
 
         if width and height:
@@ -180,7 +188,7 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         )
         
         image = crop_and_resize_image(image, width, height)
-        logger.error("===== API /sdapi/v2/rembg-crop end in {:.3f} seconds =====".format(time.time() - start_time))
+        logger.info("===== API /sdapi/v2/rembg-crop end in {:.3f} seconds =====".format(time.time() - start_time))
         return {"image": image}
 
 try:
