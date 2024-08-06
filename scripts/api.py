@@ -5,6 +5,7 @@ from modules.api.models import *
 from modules.api import api
 import gradio as gr
 from PIL import Image
+import numpy as np
 import io
 import base64
 
@@ -99,6 +100,71 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
                     }
                 }
 
+    def rgba_to_rgb(img):
+        img_np = np.array(img)
+
+        r, g, b, a = img_np[:, :, 0], img_np[:, :, 1], img_np[:, :, 2], img_np[:, :, 3]
+        mask = a > 250
+        foreground_r = r[mask]
+        foreground_g = g[mask]
+        foreground_b = b[mask]
+
+        if len(foreground_r) == 0:
+            raise ValueError("No foreground pixels found.")
+
+        avg_r = np.mean(foreground_r)
+        avg_g = np.mean(foreground_g)
+        avg_b = np.mean(foreground_b)
+
+        avg_foreground = (avg_r + avg_g + avg_b) / 3
+        if avg_foreground > 180:
+            background_color = [0, 0, 0]
+        else:
+            background_color = [255, 255, 255]
+
+        new_img_np = np.zeros((img_np.shape[0], img_np.shape[1], 3), dtype=np.uint8)
+        new_img_np[:, :] = background_color
+
+        new_img_np[mask] = img_np[mask][:, :3]
+
+        new_img = Image.fromarray(new_img_np)
+        return new_img
+
+    @app.post("/sdapi/v2/rembg-outfit")
+    async def rembg_remove_v2(
+        input_image: str = Body("", title='rembg input image'),
+        model: str = Body("u2net", title='rembg model'), 
+        return_mask: bool = Body(False, title='return mask'), 
+        alpha_matting: bool = Body(False, title='alpha matting'), 
+        alpha_matting_foreground_threshold: int = Body(240, title='alpha matting foreground threshold'), 
+        alpha_matting_background_threshold: int = Body(10, title='alpha matting background threshold'), 
+        alpha_matting_erode_size: int = Body(10, title='alpha matting erode size')
+    ):
+        logger.info("===== API /sdapi/v2/rembg start =====")
+        start_time = time.time()
+        if not model or model == "None":
+            return
+
+        input_image = api.decode_base64_to_image(input_image)
+        input_image = input_image.convert("RGB")
+
+        image = rembg.remove(
+            input_image,
+            session=rembg.new_session(model),
+            only_mask=return_mask,
+            alpha_matting=alpha_matting,
+            alpha_matting_foreground_threshold=alpha_matting_foreground_threshold,
+            alpha_matting_background_threshold=alpha_matting_background_threshold,
+            alpha_matting_erode_size=alpha_matting_erode_size,
+        )
+        left, upper, right, lower = image.getbbox()
+        logger.info("===== API /sdapi/v2/rembg end in {:.3f} seconds =====".format(time.time() - start_time))
+        return  {
+                    "image": api.encode_pil_to_base64(rgba_to_rgb(image)).decode("utf-8"),
+                    "box": {
+                        "x": left, "y" : upper, "width" : right - left, "height" : lower - upper,
+                    }
+                }
     
     def crop_and_resize_image(image, width=None, height=None):
         def get_bbox(img, alpha_threshold=10):
