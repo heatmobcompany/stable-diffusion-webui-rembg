@@ -102,8 +102,14 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
 
     def rgba_to_rgb(img):
         img_np = np.array(img)
+        
+        # Ensure the input image is in RGBA format
+        if img_np.shape[2] != 4:
+            raise ValueError("Input image must have 4 channels (RGBA)")
 
         r, g, b, a = img_np[:, :, 0], img_np[:, :, 1], img_np[:, :, 2], img_np[:, :, 3]
+        
+        # Mask to find foreground pixels
         mask = a > 250
         foreground_r = r[mask]
         foreground_g = g[mask]
@@ -112,21 +118,28 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         if len(foreground_r) == 0:
             raise ValueError("No foreground pixels found.")
 
+        # Calculate average foreground brightness
         avg_r = np.mean(foreground_r)
         avg_g = np.mean(foreground_g)
         avg_b = np.mean(foreground_b)
-
         avg_foreground = (avg_r + avg_g + avg_b) / 3
-        if avg_foreground > 180:
-            background_color = [0, 0, 0]
-        else:
-            background_color = [255, 255, 255]
 
+        # Determine background color based on average brightness
+        if avg_foreground > 180:
+            background_color = [0, 0, 0]  # Black background
+        else:
+            background_color = [255, 255, 255]  # White background
+
+        # Create new RGB image with the selected background color
         new_img_np = np.zeros((img_np.shape[0], img_np.shape[1], 3), dtype=np.uint8)
         new_img_np[:, :] = background_color
 
-        new_img_np[mask] = img_np[mask][:, :3]
+        # Blend the RGBA image with the background
+        alpha = a / 255.0
+        for c in range(3):
+            new_img_np[:, :, c] = alpha * img_np[:, :, c] + (1 - alpha) * background_color[c]
 
+        # Return the new image
         new_img = Image.fromarray(new_img_np)
         return new_img
 
