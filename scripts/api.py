@@ -125,7 +125,8 @@ def rembg_api(_: gr.Blocks, app: FastAPI):
         avg_foreground = (avg_r + avg_g + avg_b) / 3
 
         # Determine background color based on average brightness
-        if avg_foreground > 180:
+        print("xxxx avg_foreground", avg_foreground)
+        if avg_foreground > 230:
             background_color = [0, 0, 0]  # Black background
         else:
             background_color = [255, 255, 255]  # White background
